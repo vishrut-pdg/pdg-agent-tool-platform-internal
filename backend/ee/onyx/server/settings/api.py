@@ -3,6 +3,7 @@
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 
+from ee.onyx.configs.app_configs import INTERNAL_BUILD
 from ee.onyx.configs.app_configs import LICENSE_ENFORCEMENT_ENABLED
 from ee.onyx.db.license import get_cached_license_metadata
 from ee.onyx.db.license import refresh_license_cache
@@ -37,6 +38,10 @@ def check_ee_features_enabled() -> bool:
     - Self-hosted with no license (never subscribed)
     - Self-hosted with expired license
     """
+    if INTERNAL_BUILD:
+        # Internal enterprise build: EE features are always on, no license needed.
+        return True
+
     if not LICENSE_ENFORCEMENT_ENABLED:
         # License enforcement disabled - allow EE features (legacy behavior)
         return True
@@ -84,6 +89,14 @@ def apply_license_status_to_settings(settings: Settings) -> Settings:
     If LICENSE_ENFORCEMENT_ENABLED is false, ee_features_enabled is set to True
     (since EE code was loaded via ENABLE_PAID_ENTERPRISE_EDITION_FEATURES).
     """
+    if INTERNAL_BUILD:
+        # Internal enterprise build: skip license lookup entirely. Tier is
+        # ENTERPRISE, EE features on, application_status remains ACTIVE so
+        # the frontend doesn't render its access-restricted gate.
+        settings.tier = Tier.ENTERPRISE
+        settings.ee_features_enabled = True
+        return settings
+
     if not LICENSE_ENFORCEMENT_ENABLED:
         # License enforcement disabled - EE code is loaded via
         # ENABLE_PAID_ENTERPRISE_EDITION_FEATURES, so EE features are on
